@@ -7,17 +7,13 @@ import seaborn as sns
 from io import BytesIO
 import scipy.stats as stats
 
-# Default standard palette colors (standard matplotlib / plotly colors)
-COLOR_STRATEGY = '#1f77b4'  # Standard Blue
-COLOR_BENCHMARK = '#7f7f7f' # Standard Gray
-COLOR_DRAWDOWN = '#d62728'  # Standard Red
-COLOR_LONG = '#2ca02c'      # Standard Green
-COLOR_SHORT = '#ff7f0e'     # Standard Orange
+COLOR_STRATEGY = '#1f77b4'
+COLOR_BENCHMARK = '#7f7f7f'
+COLOR_DRAWDOWN = '#d62728'
+COLOR_LONG = '#2ca02c'
+COLOR_SHORT = '#ff7f0e'
 
 def _apply_dark_theme(fig):
-    """
-    Standard layout settings, letting Streamlit handle color theme mapping.
-    """
     fig.update_layout(
         margin=dict(l=10, r=10, t=40, b=10),
         legend=dict(
@@ -31,9 +27,6 @@ def _apply_dark_theme(fig):
     return fig
 
 def plot_equity_curves(df: pd.DataFrame) -> go.Figure:
-    """
-    Generates interactive Plotly dual-line equity curve comparison.
-    """
     fig = go.Figure()
     
     fig.add_trace(go.Scatter(
@@ -59,11 +52,8 @@ def plot_equity_curves(df: pd.DataFrame) -> go.Figure:
     return _apply_dark_theme(fig)
 
 def plot_drawdowns(df: pd.DataFrame) -> go.Figure:
-    """
-    Generates rolling drawdown visualization.
-    """
     cum_max = df['equity'].cummax()
-    drawdowns = (df['equity'] - cum_max) / cum_max * 100 # Percentage
+    drawdowns = (df['equity'] - cum_max) / cum_max * 100
     
     fig = go.Figure()
     fig.add_trace(go.Scatter(
@@ -83,14 +73,10 @@ def plot_drawdowns(df: pd.DataFrame) -> go.Figure:
     return _apply_dark_theme(fig)
 
 def plot_signal_overlay(df: pd.DataFrame) -> go.Figure:
-    """
-    Generates main price action plot overlaid with entry/exit transaction signals.
-    """
     fig = make_subplots(rows=2, cols=1, shared_xaxes=True, 
                         vertical_spacing=0.08, 
                         row_heights=[0.75, 0.25])
     
-    # 1. Price series
     fig.add_trace(go.Scatter(
         x=df.index,
         y=df['close'],
@@ -99,11 +85,9 @@ def plot_signal_overlay(df: pd.DataFrame) -> go.Figure:
         hovertemplate='Close: %{y:.2f}<extra></extra>'
     ), row=1, col=1)
     
-    # Detect signal shifts
     signals = df['position']
     shifted_signals = signals.shift(1).fillna(0.0)
     
-    # Buy markers (Position became 1)
     buys = df[(signals == 1.0) & (shifted_signals != 1.0)]
     fig.add_trace(go.Scatter(
         x=buys.index,
@@ -114,7 +98,6 @@ def plot_signal_overlay(df: pd.DataFrame) -> go.Figure:
         hovertemplate='Buy Price: %{y:.2f}<extra></extra>'
     ), row=1, col=1)
     
-    # Sell markers (Position became -1)
     sells = df[(signals == -1.0) & (shifted_signals != -1.0)]
     fig.add_trace(go.Scatter(
         x=sells.index,
@@ -125,7 +108,6 @@ def plot_signal_overlay(df: pd.DataFrame) -> go.Figure:
         hovertemplate='Sell Price: %{y:.2f}<extra></extra>'
     ), row=1, col=1)
     
-    # Close markers (Position became 0 from non-zero)
     flats = df[(signals == 0.0) & (shifted_signals != 0.0)]
     fig.add_trace(go.Scatter(
         x=flats.index,
@@ -136,7 +118,6 @@ def plot_signal_overlay(df: pd.DataFrame) -> go.Figure:
         hovertemplate='Exit Price: %{y:.2f}<extra></extra>'
     ), row=1, col=1)
     
-    # 2. Daily Position Indicator Subplot
     fig.add_trace(go.Scatter(
         x=df.index,
         y=df['position'],
@@ -158,12 +139,8 @@ def plot_signal_overlay(df: pd.DataFrame) -> go.Figure:
     return _apply_dark_theme(fig)
 
 def plot_return_distribution(df: pd.DataFrame) -> go.Figure:
-    """
-    Plots the distribution of daily returns with Gaussian normal fit.
-    """
-    returns = df['strategy_return'] * 100 # Percentage
+    returns = df['strategy_return'] * 100
     
-    # Calculate histogram details
     counts, bins = np.histogram(returns, bins=50)
     bins = 0.5 * (bins[:-1] + bins[1:])
     
@@ -177,12 +154,10 @@ def plot_return_distribution(df: pd.DataFrame) -> go.Figure:
         hovertemplate='Daily Return Bin: %{x:.2f}%<br>Count: %{y}<extra></extra>'
     ))
     
-    # Fit normal distribution
     mu, sigma = returns.mean(), returns.std()
     if sigma > 0:
         x_fit = np.linspace(returns.min(), returns.max(), 200)
         y_fit = stats.norm.pdf(x_fit, mu, sigma)
-        # Normalize normal curve to match histogram height
         y_fit = y_fit * len(returns) * (bins[1] - bins[0])
         
         fig.add_trace(go.Scatter(
@@ -201,19 +176,13 @@ def plot_return_distribution(df: pd.DataFrame) -> go.Figure:
     return _apply_dark_theme(fig)
 
 def plot_monthly_heatmap(df: pd.DataFrame) -> plt.Figure:
-    """
-    Generates a standard Seaborn heatmap for monthly returns.
-    """
-    # Group returns by Year and Month
     monthly_ret = df['strategy_return'].groupby([df.index.year, df.index.month]).apply(
         lambda x: (1 + x).prod() - 1
-    ).unstack() * 100 # percentage
+    ).unstack() * 100
     
-    # Set standard month abbreviations
     monthly_ret.columns = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
     monthly_ret.index.name = 'Year'
     
-    # Calculate full-year returns
     yearly_ret = df['strategy_return'].groupby(df.index.year).apply(
         lambda x: (1 + x).prod() - 1
     ) * 100
@@ -221,7 +190,6 @@ def plot_monthly_heatmap(df: pd.DataFrame) -> plt.Figure:
     
     fig, ax = plt.subplots(figsize=(10, max(3, len(monthly_ret) * 0.4)))
     
-    # Standard red-yellow-green colormap
     sns.heatmap(
         monthly_ret,
         annot=True,
@@ -243,15 +211,10 @@ def plot_monthly_heatmap(df: pd.DataFrame) -> plt.Figure:
     return fig
 
 def plot_rolling_metrics(df: pd.DataFrame, window: int = 60) -> go.Figure:
-    """
-    Plots rolling Sharpe Ratio and rolling Standard Deviation.
-    """
     returns = df['strategy_return']
     
-    # Rolling Volatility
     rolling_vol = returns.rolling(window).std() * np.sqrt(252) * 100
     
-    # Rolling Sharpe
     rolling_mean = returns.rolling(window).mean()
     rolling_sharpe = (rolling_mean / returns.rolling(window).std()) * np.sqrt(252)
     rolling_sharpe = rolling_sharpe.replace([np.inf, -np.inf], np.nan).fillna(0.0)

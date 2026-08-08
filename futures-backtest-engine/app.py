@@ -6,7 +6,6 @@ import matplotlib.pyplot as plt
 from datetime import datetime, timedelta
 import plotly.graph_objects as go
 
-# Import engine components
 from core.data_engine import CONTRACTS, get_futures_data
 from core.backtest_engine import FuturesBacktester
 from core.strategies.ma_crossover import MACrossoverStrategy
@@ -14,28 +13,23 @@ from core.strategies.momentum import MomentumStrategy
 from core.strategies.mean_reversion import MeanReversionStrategy
 from core.analytics import calculate_performance_metrics, run_regression_analysis
 
-# Import design components
 from utils.styles import CSS_STYLES
 from utils.visualization import (
     plot_equity_curves, plot_drawdowns, plot_signal_overlay,
     plot_return_distribution, plot_monthly_heatmap, plot_rolling_metrics
 )
 
-# Set page configuration
 st.set_page_config(
     page_title="Futures Backtester & Risk Analytics Dashboard",
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
-# Inject custom CSS stylesheet
 st.markdown(CSS_STYLES, unsafe_allow_html=True)
 
-# App Header (simple student style)
 st.title("Futures Backtesting & Risk Analytics Engine")
 st.markdown("*A Python application for evaluating Momentum, Mean Reversion, and Moving-Average Crossover strategies.*")
 
-# ----------------- SIDEBAR CONFIGURATION -----------------
 st.sidebar.markdown("### 🌐 Data & Environment")
 
 data_source = st.sidebar.radio(
@@ -44,7 +38,6 @@ data_source = st.sidebar.radio(
     index=0
 )
 
-# Determine contracts list
 contract_symbols = list(CONTRACTS.keys())
 selected_symbol = st.sidebar.selectbox(
     "Target Futures Contract",
@@ -53,20 +46,16 @@ selected_symbol = st.sidebar.selectbox(
     format_func=lambda x: f"{x} - {CONTRACTS[x]['name']}"
 )
 
-# Fetch default specs for initial configuration
 spec = CONTRACTS[selected_symbol]
 
-# Date selection
 today = datetime.now()
 five_years_ago = today - timedelta(days=5*365)
 start_date = st.sidebar.date_input("Start Date", five_years_ago)
 end_date = st.sidebar.date_input("End Date", today)
 
-# Check dates validity
 if start_date >= end_date:
     st.sidebar.error("Error: Start Date must be prior to End Date.")
 
-# Capitalization & Execution Cost settings
 st.sidebar.markdown("### 💰 Account & Execution Model")
 initial_capital = st.sidebar.number_input(
     "Initial Equity (USD)", 
@@ -97,9 +86,8 @@ else:
         max_value=50.0, 
         value=20.0, 
         step=1.0
-    ) / 100.0 # Convert to decimal
+    ) / 100.0
 
-# Execution Friction Controls (with realistic defaults)
 use_custom_costs = st.sidebar.checkbox("Override Default Fees & Slippage")
 if use_custom_costs:
     commission = st.sidebar.number_input("Brokerage Fee ($ per contract/side)", min_value=0.0, value=spec['commission'], step=0.50)
@@ -108,7 +96,6 @@ else:
     commission = spec['commission']
     slippage = spec['slippage']
 
-# Synthetic Generator controls (visible if synthetic is chosen)
 if "Synthetic" in data_source:
     st.sidebar.markdown("### 🎲 Simulation Settings")
     syn_vol = st.sidebar.slider("Annualized Volatility Target (%)", 5.0, 60.0, 20.0, 1.0) / 100.0
@@ -119,7 +106,6 @@ else:
     syn_trend = 0.05
     syn_regimes = True
 
-# ----------------- DATA LOADING -----------------
 with st.spinner("Downloading and processing contract term structures..."):
     try:
         df = get_futures_data(
@@ -143,7 +129,6 @@ with st.spinner("Downloading and processing contract term structures..."):
             regime_switching=syn_regimes
         )
 
-# ----------------- CONTRACT DETAILS BANNER (Clean standard expander) -----------------
 with st.expander("📝 View Contract Specifications", expanded=True):
     col_s1, col_s2, col_s3, col_s4 = st.columns(4)
     with col_s1:
@@ -159,14 +144,12 @@ with st.expander("📝 View Contract Specifications", expanded=True):
         st.markdown(f"**Maint. Margin:** {spec['maintenance_margin_rate']*100:.1f}%")
         st.markdown(f"**Commissions:** ${commission:.2f}/side")
 
-# Initialize Strategy Settings in Main UI
 st.markdown('<div class="section-header">Strategy Configuration</div>', unsafe_allow_html=True)
 strategy_name = st.selectbox(
     "Select Strategy to Analyze",
     ["Moving-Average Crossover (Baseline)", "Momentum Strategy (TSMOM)", "Mean Reversion Strategy"]
 )
 
-# Render strategy parameters dynamically
 col_p1, col_p2, col_p3 = st.columns(3)
 
 if strategy_name == "Moving-Average Crossover (Baseline)":
@@ -189,7 +172,7 @@ elif strategy_name == "Momentum Strategy (TSMOM)":
         
     strategy = MomentumStrategy(lookback_window=lookback, adx_threshold=adx_thresh, use_adx_filter=use_adx)
 
-else: # Mean Reversion Strategy
+else:
     with col_p1:
         mr_window = st.number_input("Rolling Mean Window (days)", min_value=5, max_value=150, value=20)
     with col_p2:
@@ -199,11 +182,8 @@ else: # Mean Reversion Strategy
         
     strategy = MeanReversionStrategy(rolling_window=mr_window, entry_threshold=entry_z, exit_threshold=exit_z)
 
-# ----------------- BACKTEST EXECUTION -----------------
-# Run strategy signal generator
 signals = strategy.generate_signals(df)
 
-# Run backtester
 backtester = FuturesBacktester(
     contract_symbol=selected_symbol,
     initial_capital=initial_capital,
@@ -214,11 +194,9 @@ backtester = FuturesBacktester(
 )
 results = backtester.run(df, signals)
 
-# Run performance and risk analytics
 metrics = calculate_performance_metrics(results)
 regression = run_regression_analysis(results)
 
-# ----------------- APP TAB LAYOUT -----------------
 tab1, tab2, tab3, tab4, tab5 = st.tabs([
     "📊 Performance Dashboard", 
     "🎯 Signal Diagnostics", 
@@ -227,9 +205,7 @@ tab1, tab2, tab3, tab4, tab5 = st.tabs([
     "📝 Trade Ledger"
 ])
 
-# ------------- TAB 1: PERFORMANCE DASHBOARD -------------
 with tab1:
-    # KPI Grid using standard st.metric
     kpi_col1, kpi_col2, kpi_col3, kpi_col4 = st.columns(4)
     
     with kpi_col1:
@@ -268,13 +244,11 @@ with tab1:
         st.plotly_chart(plot_equity_curves(results), use_container_width=True)
         st.plotly_chart(plot_drawdowns(results), use_container_width=True)
     with col_chart2:
-        # Display monthly return heatmap
         st.markdown("<p style='text-align: center; color: #94a3b8; font-weight: bold;'>Year-on-Year Monthly Return Matrix</p>", unsafe_allow_html=True)
         fig_map = plot_monthly_heatmap(results)
         st.pyplot(fig_map)
         plt.close(fig_map)
         
-        # Display key secondary statistics
         st.markdown("### 📊 Trade Efficiency Metrics")
         stat_df = pd.DataFrame({
             "Metric": [
@@ -290,7 +264,6 @@ with tab1:
         })
         st.table(stat_df.set_index("Metric"))
 
-# ------------- TAB 2: SIGNAL DIAGNOSTICS -------------
 with tab2:
     st.markdown('<div class="section-header">Trade & Signal Visual Validation</div>', unsafe_allow_html=True)
     st.info(
@@ -299,25 +272,14 @@ with tab2:
     )
     st.plotly_chart(plot_signal_overlay(results), use_container_width=True)
 
-# ------------- TAB 3: RISK & REGRESSION ATTRIBUTION -------------
 with tab3:
     st.markdown('<div class="section-header">Capital Asset Pricing Model (CAPM) Factor Attribution</div>', unsafe_allow_html=True)
     
     col_reg1, col_reg2 = st.columns([1, 1])
     with col_reg1:
         st.markdown(
-            f"""
-            The strategy returns are regressed against the underlying contract (benchmark) returns using **Statsmodels OLS regression**.
-            This separates returns into market sensitivity (Beta) and idiosyncratic risk-adjusted return (Alpha).
-            
-            * **Annualized Alpha:** {regression['alpha_annualized']*100:.2f}% (p-value: `{regression['p_value_alpha']:.4f}`)
-            * **Beta Exposure:** {regression['beta']:.3f} (p-value: `{regression['p_value_beta']:.4f}`)
-            * **R-Squared:** {regression['r_squared']*100:.1f}% (Adjusted R-squared: `{regression['adjusted_r_squared']*100:.1f}%`)
-            * **F-Statistic:** {regression['f_statistic']:.2f}
-            """
         )
         
-        # P-value description
         if regression['p_value_alpha'] < 0.05:
             st.success("✨ **Statistically Significant Alpha:** The strategy has generated true excess returns not explained by benchmark beta.")
         else:
@@ -345,7 +307,6 @@ with tab3:
         st.table(risk_df.set_index("Risk Metric (Daily Value-at-Risk / Shortfall)"))
         
     with col_reg2:
-        # Display Statsmodels raw text summary
         with st.expander("Show Raw OLS Regression Output Summary"):
             st.text(regression['regression_summary'])
             
@@ -354,14 +315,9 @@ with tab3:
     st.markdown('<div class="section-header">Rolling Risk Metrics</div>', unsafe_allow_html=True)
     st.plotly_chart(plot_rolling_metrics(results), use_container_width=True)
 
-# ------------- TAB 4: BLENDED PORTFOLIO SANDBOX -------------
 with tab4:
     st.markdown('<div class="section-header">Multi-Strategy Portfolio Allocator</div>', unsafe_allow_html=True)
     st.markdown(
-        """
-        Dynamically combine multiple signals to inspect portfolio diversification benefits.
-        Select weights below to build your custom quantitative fund.
-        """
     )
     
     col_w1, col_w2, col_w3 = st.columns(3)
@@ -377,7 +333,6 @@ with tab4:
     if total_w != 100:
         st.error(f"Total weight must equal 100%. Current sum: {total_w}%")
     else:
-        # Run all three strategies
         strat_xo = MACrossoverStrategy(fast_window=10, slow_window=50, ma_type='EMA')
         strat_mom = MomentumStrategy(lookback_window=60, use_adx_filter=True)
         strat_rev = MeanReversionStrategy(rolling_window=20, entry_threshold=2.0, exit_threshold=0.0)
@@ -386,14 +341,12 @@ with tab4:
         sig_mom = strat_mom.generate_signals(df)
         sig_rev = strat_rev.generate_signals(df)
         
-        # Blended signal calculation (weighted average signal)
         blended_signal = (
             (w_crossover / 100.0) * sig_xo + 
             (w_momentum / 100.0) * sig_mom + 
             (w_reversion / 100.0) * sig_rev
         )
         
-        # Run composite signal through backtester
         blend_backtester = FuturesBacktester(
             contract_symbol=selected_symbol,
             initial_capital=initial_capital,
@@ -405,7 +358,6 @@ with tab4:
         blend_results = blend_backtester.run(df, blended_signal)
         blend_metrics = calculate_performance_metrics(blend_results)
         
-        # Performance comparison using standard st.metric
         comp_col1, comp_col2, comp_col3, comp_col4 = st.columns(4)
         
         with comp_col1:
@@ -437,7 +389,6 @@ with tab4:
                 delta_color="inverse"
             )
             
-        # Comparison plot
         fig_blend = go.Figure()
         fig_blend.add_trace(go.Scatter(
             x=df.index, y=df['close'] * (initial_capital / df['close'].iloc[0]),
@@ -468,11 +419,9 @@ with tab4:
         )
         st.plotly_chart(fig_blend, use_container_width=True)
 
-# ------------- TAB 5: TRADE LEDGER -------------
 with tab5:
     st.markdown('<div class="section-header">Historical Transaction Ledger</div>', unsafe_allow_html=True)
     
-    # Compile the detailed transaction log
     trade_log = []
     positions = results['position'].values
     contracts = results['contracts'].values
@@ -488,7 +437,6 @@ with tab5:
         prev_p = positions[i-1]
         curr_p = positions[i]
         
-        # Position shift detected
         if curr_p != prev_p:
             action = "FLATTEN"
             if curr_p > prev_p:
@@ -496,23 +444,18 @@ with tab5:
             elif curr_p < prev_p:
                 action = "SELL / LIQUIDATE" if prev_p != 0 else "SELL / ENTER SHORT"
             
-            # Apply cost adjustment to execute price to reflect slippage
             direction = 1 if (curr_p > prev_p) else -1
             exec_price = prices[i] + (direction * slippage)
             
-            # Identify sizing contracts traded
             qty = abs(contracts[i] - (contracts[i-1] if prev_p != 0 else 0))
             if qty == 0:
                 qty = contracts[i] if curr_p != 0 else contracts[i-1]
                 
             fee = costs[i]
             
-            # Realized trade profits calculation
             trade_pnl = 0.0
             if prev_p != 0 and (curr_p == 0 or np.sign(curr_p) != np.sign(prev_p)):
-                # Flatten or reverse trade
                 trade_pnl = (prices[i] - active_entry_price) * spec['multiplier'] * prev_p * qty
-                # Adjust for execution costs
                 trade_pnl -= fee
             
             trade_log.append({
@@ -526,7 +469,6 @@ with tab5:
                 "Target Position": int(curr_p)
             })
             
-            # Update active entry
             if curr_p != 0:
                 active_entry_price = prices[i]
                 active_pos = curr_p
@@ -534,10 +476,8 @@ with tab5:
     if trade_log:
         ledger_df = pd.DataFrame(trade_log)
         
-        # Add filtering / sorting options
         st.dataframe(ledger_df, use_container_width=True, hide_index=True)
         
-        # CSV Export button
         csv_buffer = io.StringIO()
         ledger_df.to_csv(csv_buffer, index=False)
         csv_bytes = csv_buffer.getvalue().encode('utf-8')

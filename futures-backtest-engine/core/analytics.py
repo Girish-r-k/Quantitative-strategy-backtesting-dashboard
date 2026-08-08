@@ -5,42 +5,31 @@ import statsmodels.api as sm
 from typing import Dict, Any, Tuple
 
 def calculate_performance_metrics(results_df: pd.DataFrame, risk_free_rate: float = 0.02) -> Dict[str, Any]:
-    """
-    Computes professional performance and risk metrics from backtest results.
-    Includes CAGR, Volatility, Sharpe, Sortino, Calmar, Max Drawdown, VaR, and ES.
-    """
     equity = results_df['equity']
     returns = results_df['strategy_return']
     daily_rf = (1 + risk_free_rate) ** (1/252) - 1
     
-    # Total trading days and years
     n_days = len(results_df)
     years = n_days / 252.0
     
-    # CAGR
     final_equity = equity.iloc[-1]
     initial_equity = equity.iloc[0]
     cagr = (final_equity / initial_equity) ** (1 / max(years, 0.001)) - 1 if final_equity > 0 else -1.0
     
-    # Annualized Volatility
     ann_vol = returns.std() * np.sqrt(252)
     
-    # Sharpe Ratio
     excess_returns = returns - daily_rf
     ann_excess_return = excess_returns.mean() * 252
     sharpe = ann_excess_return / ann_vol if ann_vol > 0 else 0.0
     
-    # Sortino Ratio
     downside_returns = returns[returns < 0]
     downside_std = downside_returns.std() * np.sqrt(252)
     sortino = ann_excess_return / downside_std if downside_std > 0 else 0.0
     
-    # Drawdown calculations
     cum_max = equity.cummax()
     drawdowns = (equity - cum_max) / cum_max
     max_dd = drawdowns.min()
     
-    # Drawdown duration (peak-to-trough in days)
     is_in_dd = drawdowns < 0
     dd_durations = []
     current_dur = 0
@@ -55,35 +44,25 @@ def calculate_performance_metrics(results_df: pd.DataFrame, risk_free_rate: floa
         dd_durations.append(current_dur)
     max_dd_duration = max(dd_durations) if dd_durations else 0
     
-    # Calmar Ratio
     calmar = cagr / abs(max_dd) if abs(max_dd) > 0 else 0.0
     
-    # Trade statistics
     positions = results_df['position']
     position_changes = positions.diff().fillna(0.0)
     
-    # Identify trades (when position shifts or changes size)
     trades = []
     active_trade = None
     
-    # Track discrete trades for statistical analysis
-    # A trade starts when position goes from 0 to +1/-1, or switches direction
-    # A trade ends when position goes to 0 or switches direction
     df_trades = results_df.copy()
     df_trades['pos_shift'] = position_changes
     
-    # Simpler trade list extraction
     trade_returns = []
     trade_pnl = []
     trade_durations = []
     win_trades = 0
     loss_trades = 0
     
-    # We iterate and find trade blocks
     trade_indices = results_df[results_df['transaction_costs'] > 0].index
-    # We can approximate win rates and profit factors directly from non-zero daily returns when in position
     active_periods = results_df[results_df['position'] != 0]
-    # Trade-level statistics from state machine
     current_trade_equity = 0.0
     in_trade = False
     trade_start_idx = 0
@@ -92,12 +71,10 @@ def calculate_performance_metrics(results_df: pd.DataFrame, risk_free_rate: floa
         prev_pos = positions.iloc[i-1]
         curr_pos = positions.iloc[i]
         
-        # Trade entry
         if prev_pos == 0 and curr_pos != 0:
             in_trade = True
             trade_start_idx = i
             current_trade_equity = equity.iloc[i-1]
-        # Trade exit or reversal
         elif prev_pos != 0 and (curr_pos == 0 or curr_pos != prev_pos):
             if in_trade:
                 trade_end_equity = equity.iloc[i]
@@ -111,14 +88,12 @@ def calculate_performance_metrics(results_df: pd.DataFrame, risk_free_rate: floa
                 else:
                     loss_trades += 1
                 
-                # If reversed, start a new trade immediately
                 if curr_pos != 0:
                     trade_start_idx = i
                     current_trade_equity = equity.iloc[i-1]
                 else:
                     in_trade = False
                     
-    # Handle open trade at the end of series
     if in_trade:
         trade_end_equity = equity.iloc[-1]
         pnl = trade_end_equity - current_trade_equity
@@ -142,25 +117,19 @@ def calculate_performance_metrics(results_df: pd.DataFrame, risk_free_rate: floa
     avg_loss = np.mean([p for p in trade_pnl if p < 0]) if loss_trades > 0 else 0.0
     win_loss_ratio = abs(avg_win / avg_loss) if abs(avg_loss) > 0 else 0.0
     
-    # Value at Risk (VaR) & Expected Shortfall (ES)
-    # 95% and 99% confidence intervals
     historical_returns = returns.values
     
-    # 1. Historical VaR
     var_95_hist = np.percentile(historical_returns, 5)
     var_99_hist = np.percentile(historical_returns, 1)
     
-    # 2. Parametric (Gaussian) VaR
     mean_ret = returns.mean()
     std_ret = returns.std()
     var_95_param = mean_ret + std_ret * stats.norm.ppf(0.05)
     var_99_param = mean_ret + std_ret * stats.norm.ppf(0.01)
     
-    # 3. Expected Shortfall (ES / Conditional VaR)
     es_95 = historical_returns[historical_returns <= var_95_hist].mean() if len(historical_returns[historical_returns <= var_95_hist]) > 0 else var_95_hist
     es_99 = historical_returns[historical_returns <= var_99_hist].mean() if len(historical_returns[historical_returns <= var_99_hist]) > 0 else var_99_hist
 
-    # Margin metrics
     total_margin_calls = int(results_df['margin_call'].sum())
     max_leverage = results_df['leverage'].max()
     avg_leverage = results_df['leverage'].mean()
@@ -195,25 +164,18 @@ def calculate_performance_metrics(results_df: pd.DataFrame, risk_free_rate: floa
     }
 
 def run_regression_analysis(results_df: pd.DataFrame) -> Dict[str, Any]:
-    """
-    Fits a Capital Asset Pricing Model (CAPM) regression model using statsmodels.
-    Regresses strategy daily returns against continuous contract (benchmark) returns.
-    """
     y = results_df['strategy_return']
     x = results_df['benchmark_return']
     
-    # Statsmodels requires explicit column for intercept (alpha)
     x_with_const = sm.add_constant(x)
     
     try:
         model = sm.OLS(y, x_with_const).fit()
         
-        # Extract results
         alpha_daily = model.params['const']
-        alpha_annualized = alpha_daily * 252 # Annualize alpha
+        alpha_annualized = alpha_daily * 252
         beta = model.params['benchmark_return']
         
-        # Statistics
         p_alpha = model.pvalues['const']
         p_beta = model.pvalues['benchmark_return']
         
